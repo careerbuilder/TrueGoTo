@@ -1,0 +1,17 @@
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Id="6070a2ca-c143-4ca8-bfb1-577b52c91d6b" Version="1.0" Language="en-US" Publisher="Careerbuilder" />
+    <DisplayName>TrueGoTo</DisplayName>
+    <Description xml:space="preserve">An extension to actually Go To Definition instead of Go To (likely) Metadata</Description>
+  </Metadata>
+  <Installation InstalledByMsi="false">
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[10.0,11.0)" />
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="[4.0,4.5)" />
+    <Dependency Id="Microsoft.VisualStudio.MPF.11.0" DisplayName="Visual Studio MPF 11.0" Version="11.0" />
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="TrueGoTo.pkgdef" />
+  </Assets>
+</PackageManifest>
