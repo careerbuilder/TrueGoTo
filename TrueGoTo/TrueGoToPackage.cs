@@ -11,47 +11,35 @@ using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 
 namespace Careerbuilder.TrueGoTo
 {
-    /// <summary>
-    /// This is the class that implements the package exposed by this assembly.
-    ///
-    /// The minimum requirement for a class to be considered a valid package for Visual Studio
-    /// is to implement the IVsPackage interface and register itself with the shell.
-    /// This package uses the helper classes defined inside the Managed Package Framework (MPF)
-    /// to do it: it derives from the Package class that provides the implementation of the 
-    /// IVsPackage interface and uses the registration attributes defined in the framework to 
-    /// register itself and its components with the shell.
-    /// </summary>
-    // This attribute tells the PkgDef creation utility (CreatePkgDef.exe) that this class is
-    // a package.
     [PackageRegistration(UseManagedResourcesOnly = true)]
-    // This attribute is used to register the information needed to show this package
-    // in the Help/About dialog of Visual Studio.
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
-    // This attribute is needed to let the shell know that this package exposes some menus.
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _DTE;
         private CodeModelEvents _codeEvents;
+        private SolutionListener _solutionEvents;
+        private List<CodeElement> _solutionElements;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
-        public TrueGoToPackage() {}
+        public TrueGoToPackage() { }
 
         protected override void Initialize()
         {
             base.Initialize();
-
             _DTE = (DTE2)GetService(typeof(DTE));
+            _solutionEvents = new SolutionListener(GetService(typeof(SVsSolution)) as IVsSolution);
+            _solutionElements = NavigateProjects(_DTE.Solution.Projects);
+            //_solutionEvents.OnAfterOpenSolution(null, null) += () => { _isSolutionLoaded = true; };
 
-            // Add our command handlers for menu (commands must exist in the .vsct file)
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
             {
-                // Create the command for the menu item.
                 CommandID menuCommandID = new CommandID(GuidList.guidTrueGoToCmdSet, (int)PkgCmdIDList.cmdTrueGoTo);
                 MenuCommand menuItem = new MenuCommand(MenuItemCallback, menuCommandID);
                 mcs.AddCommand(menuItem);
@@ -72,9 +60,10 @@ namespace Careerbuilder.TrueGoTo
                 string target = GetWordFromSelection(selectedText);
                 if (!String.IsNullOrWhiteSpace(target))
                 {
-                    List<CodeElement> codeElements = NavigateProjects(_DTE.Solution.Projects);
-                    CodeElement targetElement = ReduceResultSet(codeElements, target);
-                    if (targetElement == null)
+                    CodeElement targetElement = ReduceResultSet(_solutionElements, target);
+                    if (targetElement != null)
+                        ChangeActiveDocument(targetElement);
+                    else
                         _DTE.ExecuteCommand("Edit.GoToDefinition");
                 }
                 return;
@@ -95,7 +84,7 @@ namespace Careerbuilder.TrueGoTo
                 string selectedWord = leftWord + rightWord;
                 if (String.IsNullOrWhiteSpace(target) || Regex.Match(selectedWord, target, RegexOptions.IgnoreCase).Success)
                 {
-                    return selectedWord;
+                    return selectedWord.Trim();
                 }
             }
 
@@ -112,15 +101,13 @@ namespace Careerbuilder.TrueGoTo
             {
                 if (codeElements.Count == 1)
                     return codeElements[0];
-
                 activeNamespaces = TrueGoToPackage.ConvertToElementArray<CodeElement>(_DTE.ActiveDocument.ProjectItem.FileCodeModel.CodeElements)
                     .Where(e => whiteList.Contains(e.Kind)).Select(e => ((CodeImport)e).Namespace).ToList();
-
                 return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
-
             }
             return null;
         }
+
 
         private CodeElement HandleFunctionResultSet(IEnumerable<CodeElement> elements)
         {
@@ -128,6 +115,14 @@ namespace Careerbuilder.TrueGoTo
                 return elements.FirstOrDefault();
             else
                 return elements.FirstOrDefault();
+        }
+
+        private void ChangeActiveDocument(CodeElement definingElement)
+        {
+            Window window = definingElement.ProjectItem.Open(EnvDTE.Constants.vsViewKindCode);
+            window.Activate();
+            TextSelection currentPoint = window.Document.Selection as TextSelection;
+            currentPoint.MoveToDisplayColumn(definingElement.StartPoint.Line, definingElement.StartPoint.DisplayColumn);
         }
 
         private List<CodeElement> NavigateProjects(Projects projects)
@@ -154,7 +149,6 @@ namespace Careerbuilder.TrueGoTo
                         codeElements.AddRange(NavigateProjectItems(item.SubProject.ProjectItems));
                     else
                         codeElements.AddRange(NavigateProjectItems(item.ProjectItems));
-
                     if (item.FileCodeModel != null)
                         codeElements.AddRange(NavigateCodeElements(item.FileCodeModel.CodeElements));
                 }
@@ -175,7 +169,6 @@ namespace Careerbuilder.TrueGoTo
                     if (element.Kind != vsCMElement.vsCMElementDelegate)
                     {
                         members = GetMembers(element);
-
                         if (members != null)
                             codeElements.AddRange(NavigateCodeElements(members));
                     }
