@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -34,6 +35,7 @@ namespace Careerbuilder.TrueGoTo
     {
         private DTE2 _DTE;
         private CodeModelEvents _codeEvents;
+        private readonly vsCMElement[] blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
         /// <summary>
         /// Default constructor of the package.
@@ -85,7 +87,7 @@ namespace Careerbuilder.TrueGoTo
                 if (!String.IsNullOrWhiteSpace(target))
                 {
                     List<CodeElement> codeElements = getAllTypesInSolution(_DTE.Solution.Projects);
-                    List<CodeElement> targetElements = codeElements.Where(t => t.FullName.Contains(target)).ToList();
+                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName,target, RegexOptions.IgnoreCase).Success).ToList();
                     //_applicationObject.ExecuteCommand("Edit.NavigateTo");
                     //_applicationObject.ExecuteCommand("Edit.GoToDefinition");
                 }
@@ -106,19 +108,39 @@ namespace Careerbuilder.TrueGoTo
         private CodeElement[] getAllTypesInSolution(ProjectItems items)
         {
             List<CodeElement> elements = new List<CodeElement>();
+
             foreach (ProjectItem p in items)
             {
+                if (p.ProjectItems != null && p.ProjectItems.Count > 0)
+                    elements.AddRange(getAllTypesInSolution(p.ProjectItems).ToList() ?? new List<CodeElement>());
+
                 if (p.ContainingProject.CodeModel != null)
                 {
-                    foreach (CodeElement c in p.ContainingProject.CodeModel.CodeElements)
-                    {
-                        //if (c.Kind == vsCMElement.vsCMElementDeclareDecl)
-                        //{
-                        elements.Add(c);
-                        //}
-                    }
+                    elements.AddRange(getAllCodeElementsInCodeElements(p.ContainingProject.CodeModel.CodeElements));
                 }
             }
+            return elements.ToArray();
+        }
+
+        private CodeElement[] getAllCodeElementsInCodeElements(CodeElements elementList)
+        {
+            List<CodeElement> elements = new List<CodeElement>();
+            CodeElements members = null;
+            foreach (CodeElement elm in elementList)
+            {
+                if (elm.IsCodeType)
+                {
+                    if (elm.Kind != vsCMElement.vsCMElementDelegate)
+                        members = ((CodeType)elm).Members;
+
+                    if (members != null && members.Count > 0)
+                        elements.AddRange(getAllCodeElementsInCodeElements(members) ?? new CodeElement[0]);
+
+                    if (!blackList.Contains(elm.Kind))
+                        elements.Add(elm);
+                }
+            }
+
             return elements.ToArray();
         }
 
