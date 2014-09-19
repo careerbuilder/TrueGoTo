@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio;
@@ -22,30 +23,36 @@ namespace Careerbuilder.TrueGoTo
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
-    public sealed class TrueGoToPackage : Package, IVsSolutionEvents
+    public sealed class TrueGoToPackage : Package
     {
         private DTE2 _DTE;
         private object _solutionElementsLock;
         private CodeModelEvents _codeEvents;
-        private UInt32 _solutionEventsCookie;
-        private bool _isInitialized;
-        private int _loadedProjectCount;
-        private int _maxProjectCount;
         private List<CodeElement> _solutionElements;
+        private System.Timers.Timer _timer;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
         public TrueGoToPackage() 
         {
             _solutionElements = new List<CodeElement>();
             _solutionElementsLock = new object();
-            _isInitialized = false;
         }
 
         protected override void Initialize()
         {
             base.Initialize();
             _DTE = (DTE2)GetService(typeof(DTE));
+            IVsSolution4 ivsSolution4 = GetService(typeof(SVsSolution)) as IVsSolution4;
+            
+            ivsSolution4.EnsureSolutionIsLoaded(Convert.ToUInt32(__VSBSLFLAGS.VSBSLFLAGS_LoadAllPendingProjects));
             AddHandlers();
+
+            _timer = new System.Timers.Timer();
+            _timer.Interval = 500; 
+            _timer.AutoReset = true;
+            _timer.Elapsed += new ElapsedEventHandler(TimerElapsed);
+            _timer.Start();
+
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
             {
@@ -67,6 +74,35 @@ namespace Careerbuilder.TrueGoTo
             _codeEvents = null;
         }
 
+        private void TimerElapsed(object sender, ElapsedEventArgs e)
+        {
+            if (isSolutionFullyLoaded())
+            {
+                _timer.Stop();
+                lock (_solutionElementsLock)
+                {
+                    try
+                    {
+                        if (_timer.Enabled == false)
+                            _solutionElements = NavigateProjects(_DTE.Solution.Projects);
+                    }
+                    catch (COMException) { } // Closed solution during navigation
+                }
+            }
+        }
+
+        private bool isSolutionFullyLoaded()
+        {   
+            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
+            object retVar = null;
+            if (ivsSolution != null)
+            {
+                ivsSolution.GetProperty((int)__VSPROPID4.VSPROPID_IsSolutionFullyLoaded, out retVar);
+            }
+            
+            return (bool)(retVar ?? false);
+        }
+
         private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
         {
             foreach (T element in list)
@@ -75,7 +111,7 @@ namespace Careerbuilder.TrueGoTo
 
         private void MenuItemCallback(object sender, EventArgs e)
         {
-            if (_isInitialized && _DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
+            if (isSolutionFullyLoaded() && _DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
             {
                 TextSelection selectedText = (TextSelection)_DTE.ActiveDocument.Selection;
                 string target = GetWordFromSelection(selectedText);
@@ -232,12 +268,6 @@ namespace Careerbuilder.TrueGoTo
             _codeEvents.ElementAdded += new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
             _codeEvents.ElementChanged += new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
             _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
-
-            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-            if (ivsSolution != null)
-            {
-                ivsSolution.AdviseSolutionEvents(this, out _solutionEventsCookie);
-            }
         }
 
         private void AddedEventHandler(CodeElement element)
@@ -264,76 +294,11 @@ namespace Careerbuilder.TrueGoTo
             }
         }
 
-        public int OnAfterCloseSolution(object pUnkReserved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterLoadProject(IVsHierarchy pStubHierarchy, IVsHierarchy pRealHierarchy)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterOpenProject(IVsHierarchy pHierarchy, int fAdded)
-        {
-            _loadedProjectCount++;
-            if (_loadedProjectCount == _maxProjectCount)
-            {
-                lock (_solutionElementsLock)
-                {
-                    _solutionElements = NavigateProjects(_DTE.Solution.Projects);
-                }
-            }
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterOpenSolution(object pUnkReserved, int fNewSolution)
-        {
-            _maxProjectCount = _DTE.Solution.Projects.Count;
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeCloseProject(IVsHierarchy pHierarchy, int fRemoved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeCloseSolution(object pUnkReserved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeUnloadProject(IVsHierarchy pRealHierarchy, IVsHierarchy pStubHierarchy)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryCloseProject(IVsHierarchy pHierarchy, int fRemoving, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryCloseSolution(object pUnkReserved, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryUnloadProject(IVsHierarchy pRealHierarchy, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
         private void RemoveHandlers()
         {
             _codeEvents.ElementAdded -= new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
             _codeEvents.ElementChanged -= new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
             _codeEvents.ElementDeleted -= new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
-
-            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-            if (_solutionEventsCookie != 0 && ivsSolution != null)
-            {
-                ivsSolution.UnadviseSolutionEvents(_solutionEventsCookie);
-            }
         }
     }
 }
