@@ -1,4 +1,0 @@
-C:\Users\fcatalano\AppData\Local\Microsoft\VisualStudio\11.0Exp\Extensions\Careerbuilder\TrueGoTo\1.0\\TrueGoTo.dll
-C:\Users\fcatalano\AppData\Local\Microsoft\VisualStudio\11.0Exp\Extensions\Careerbuilder\TrueGoTo\1.0\\TrueGoTo.pkgdef
-C:\Users\fcatalano\AppData\Local\Microsoft\VisualStudio\11.0Exp\Extensions\Careerbuilder\TrueGoTo\1.0\\extension.vsixmanifest
-C:\Users\fcatalano\AppData\Local\Microsoft\VisualStudio\11.0Exp\Extensions\Careerbuilder\TrueGoTo\1.0\\TrueGoTo.pdb

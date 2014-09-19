@@ -63,7 +63,7 @@
 
       <Button guid="guidTrueGoToCmdSet" id="cmdTrueGoTo" priority="0x0100" type="Button">
         <Parent guid="guidTrueGoToCmdSet" id="MyMenuGroup" />
-        <Icon guid="guidImages" id="bmpPic1" />
+        <Icon guid="guidImages" id="bmpPicSearch" />
         <Strings>
           <ButtonText>TrueGoTo</ButtonText>
         </Strings>
