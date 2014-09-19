@@ -95,6 +95,8 @@ namespace Careerbuilder.TrueGoTo
                 {
                     List<CodeElement> codeElements = NavigateProjects(_DTE.Solution.Projects);
                     CodeElement targetElement = ReduceResultSet(codeElements, target);
+                    if (targetElement == null)
+                        _DTE.ExecuteCommand("Edit.GoToDefinition");
                 }
                 return;
             }
@@ -127,7 +129,7 @@ namespace Careerbuilder.TrueGoTo
             List<string> activeNamespaces = new List<string>();
             vsCMElement[] whiteList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementIncludeStmt };
 
-            if (codeElements != null)
+            if (codeElements != null && codeElements.Count > 0)
             {
                 if (codeElements.Count == 1)
                     return codeElements[0];
@@ -192,7 +194,7 @@ namespace Careerbuilder.TrueGoTo
                             codeElements.AddRange(NavigateCodeElements(members));
                     }
 
-                    if (!_blackList.Contains(element.Kind) && element.IsCodeType)
+                    if (!_blackList.Contains(element.Kind))
                         codeElements.Add(element);
                 }
             }
