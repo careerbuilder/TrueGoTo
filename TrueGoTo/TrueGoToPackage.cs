@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
@@ -16,26 +17,36 @@ using Microsoft.VisualStudio.Shell.Interop;
 namespace Careerbuilder.TrueGoTo
 {
     [PackageRegistration(UseManagedResourcesOnly = true)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _DTE;
+        private object _solutionElementsLock;
         private CodeModelEvents _codeEvents;
-        private SolutionListener _solutionEvents;
         private List<CodeElement> _solutionElements;
+        private bool _isInitialized;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
-        public TrueGoToPackage() { }
+        public TrueGoToPackage() 
+        {
+            _solutionElements = new List<CodeElement>();
+            _solutionElementsLock = new object();
+            _isInitialized = false;
+        }
 
         protected override void Initialize()
         {
             base.Initialize();
             _DTE = (DTE2)GetService(typeof(DTE));
-            _solutionEvents = new SolutionListener(GetService(typeof(SVsSolution)) as IVsSolution);
-            _solutionElements = NavigateProjects(_DTE.Solution.Projects);
-            //_solutionEvents.OnAfterOpenSolution(null, null) += () => { _isSolutionLoaded = true; };
+            IVsSolution4 ivsSolution4 = GetService(typeof(SVsSolution)) as IVsSolution4;
+
+            ivsSolution4.EnsureSolutionIsLoaded(Convert.ToUInt32(__VSBSLFLAGS.VSBSLFLAGS_LoadAllPendingProjects));
+            AddHandlers();
+            System.Threading.Thread thread = new System.Threading.Thread(new ThreadStart(NavigateProjects));
+            thread.Start();
 
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
@@ -46,6 +57,18 @@ namespace Careerbuilder.TrueGoTo
             }
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            RemoveHandlers();
+            for (int i = 0; i < _solutionElements.Count(); i++)
+            {
+                _solutionElements[i] = null;
+            }
+            _solutionElements = null;
+            _codeEvents = null;
+        }
+
         private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
         {
             foreach (T element in list)
@@ -54,20 +77,26 @@ namespace Careerbuilder.TrueGoTo
 
         private void MenuItemCallback(object sender, EventArgs e)
         {
-            if (_DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
+            if (_isInitialized && _DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
             {
                 TextSelection selectedText = (TextSelection)_DTE.ActiveDocument.Selection;
                 string target = GetWordFromSelection(selectedText);
+                CodeElement targetElement = null;
                 if (!String.IsNullOrWhiteSpace(target))
                 {
-                    CodeElement targetElement = ReduceResultSet(_solutionElements, target);
+                    lock (_solutionElementsLock)
+                    {
+                        targetElement = ReduceResultSet(_solutionElements, target);
+                    }
                     if (targetElement != null)
+                    {
                         ChangeActiveDocument(targetElement);
-                    else
-                        _DTE.ExecuteCommand("Edit.GoToDefinition");
+                        return;
+                    }
                 }
-                return;
             }
+            
+            _DTE.ExecuteCommand("Edit.GoToDefinition");
         }
 
         private string GetWordFromSelection(TextSelection selection)
@@ -103,7 +132,10 @@ namespace Careerbuilder.TrueGoTo
                     return codeElements[0];
                 activeNamespaces = TrueGoToPackage.ConvertToElementArray<CodeElement>(_DTE.ActiveDocument.ProjectItem.FileCodeModel.CodeElements)
                     .Where(e => whiteList.Contains(e.Kind)).Select(e => ((CodeImport)e).Namespace).ToList();
-                return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
+                if (activeNamespaces.Count > 0)
+                    return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
+                else
+                    return HandleFunctionResultSet(codeElements);
             }
             return null;
         }
@@ -125,16 +157,23 @@ namespace Careerbuilder.TrueGoTo
             currentPoint.MoveToDisplayColumn(definingElement.StartPoint.Line, definingElement.StartPoint.DisplayColumn);
         }
 
-        private List<CodeElement> NavigateProjects(Projects projects)
+        private void NavigateProjects()
         {
             List<CodeElement> types = new List<CodeElement>();
-
-            foreach (Project p in projects)
+            try
             {
-                types.AddRange(NavigateProjectItems(p.ProjectItems));
+                foreach (Project p in _DTE.Solution.Projects)
+                {
+                    types.AddRange(NavigateProjectItems(p.ProjectItems));
+                }
             }
+            catch (COMException) { }
 
-            return types;
+            lock (_solutionElementsLock)
+            {
+                _isInitialized = true;
+                _solutionElements.AddRange(types);
+            }
         }
 
         private CodeElement[] NavigateProjectItems(ProjectItems items)
@@ -204,19 +243,28 @@ namespace Careerbuilder.TrueGoTo
             _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
         }
 
-        private void AddedEventHandler(CodeElement Element)
+        private void AddedEventHandler(CodeElement element)
         {
-            throw new NotImplementedException();
+            lock (_solutionElementsLock)
+            {
+                _solutionElements.Add(element);
+            }
         }
 
-        private void ChangedEventHandler(CodeElement Element, vsCMChangeKind Change)
+        private void ChangedEventHandler(CodeElement element, vsCMChangeKind change)
         {
-            throw new NotImplementedException();
+            lock (_solutionElementsLock)
+            {
+                _solutionElements.Add(element);
+            }
         }
 
-        private void DeletedEventHandler(object Parent, CodeElement Element)
+        private void DeletedEventHandler(object parent, CodeElement element)
         {
-            throw new NotImplementedException();
+            lock (_solutionElementsLock)
+            {
+                _solutionElements.Remove(element);
+            }
         }
 
         private void RemoveHandlers()

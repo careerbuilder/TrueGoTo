@@ -4,6 +4,8 @@
     <Identity Id="6070a2ca-c143-4ca8-bfb1-577b52c91d6b" Version="1.0" Language="en-US" Publisher="Careerbuilder" />
     <DisplayName>TrueGoTo</DisplayName>
     <Description xml:space="preserve">An extension to actually Go To Definition instead of Go To (likely) Metadata</Description>
+    <Icon>Search.ico</Icon>
+    <Tags>GoToDefinition NavigateTo</Tags>
   </Metadata>
   <Installation InstalledByMsi="false">
     <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[10.0,11.0)" />
