@@ -37,7 +37,7 @@ namespace Careerbuilder.TrueGoTo
     {
         private DTE2 _DTE;
         private CodeModelEvents _codeEvents;
-        private readonly vsCMElement[] blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
+        private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
         /// <summary>
         /// Default constructor of the package.
@@ -94,7 +94,9 @@ namespace Careerbuilder.TrueGoTo
                 if (!String.IsNullOrWhiteSpace(target))
                 {
                     List<CodeElement> codeElements = NavigateProjects(_DTE.Solution.Projects);
-                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName, target, RegexOptions.IgnoreCase).Success).ToList();
+                    CodeElement targetElement = ReduceResultSet(codeElements, target);
+                    if (targetElement == null)
+                        _DTE.ExecuteCommand("Edit.GoToDefinition");
                 }
                 return;
             }
@@ -105,18 +107,41 @@ namespace Careerbuilder.TrueGoTo
             string target = selection.Text;
 
             selection.WordLeft(true);
-            if (String.IsNullOrWhiteSpace(target) || Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
-            {
-                return selection.Text;
-            }
+            string leftWord = selection.Text;
+            selection.WordRight(true);
+            string rightWord = selection.Text;
 
-            selection.WordRight();
-            if (Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
+            if (!(String.IsNullOrWhiteSpace(leftWord) || String.IsNullOrWhiteSpace(rightWord)))
             {
-                return selection.Text;
+                string selectedWord = leftWord + rightWord;
+                if (String.IsNullOrWhiteSpace(target) || Regex.Match(selectedWord, target, RegexOptions.IgnoreCase).Success)
+                {
+                    return selectedWord;
+                }
             }
 
             return target;
+        }
+
+        private CodeElement ReduceResultSet(List<CodeElement> elements, string target)
+        {
+            List<CodeElement> codeElements = elements.Where(t => t.Name.Equals(target)).ToList();
+            List<string> activeNamespaces = new List<string>();
+            vsCMElement[] whiteList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementIncludeStmt };
+
+            if (codeElements != null && codeElements.Count > 0)
+            {
+                if (codeElements.Count == 1)
+                    return codeElements[0];
+
+                activeNamespaces = TrueGoToPackage.ConvertToElementArray<CodeElement>(_DTE.ActiveDocument.ProjectItem.FileCodeModel.CodeElements)
+                    .Where(e => whiteList.Contains(e.Kind))
+                    .Select(e => e.Name).ToList();
+
+                return codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))).FirstOrDefault();
+
+            }
+            return null;
         }
 
         private List<CodeElement> NavigateProjects(Projects projects)
@@ -169,7 +194,7 @@ namespace Careerbuilder.TrueGoTo
                             codeElements.AddRange(NavigateCodeElements(members));
                     }
 
-                    if (!blackList.Contains(element.Kind) && element.IsCodeType)
+                    if (!_blackList.Contains(element.Kind))
                         codeElements.Add(element);
                 }
             }
