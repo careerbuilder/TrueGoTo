@@ -39,23 +39,8 @@ namespace Careerbuilder.TrueGoTo
         private CodeModelEvents _codeEvents;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
-        /// <summary>
-        /// Default constructor of the package.
-        /// Inside this method you can place any initialization code that does not require 
-        /// any Visual Studio service because at this point the package object is created but 
-        /// not sited yet inside Visual Studio environment. The place to do all the other 
-        /// initialization is the Initialize method.
-        /// </summary>
-        public TrueGoToPackage()
-        {
-        }
+        public TrueGoToPackage() {}
 
-        #region Overridden Package Members
-
-        /// <summary>
-        /// Initialization of the package; this method is called right after the package is sited, so this is the place
-        /// where you can put all the initialization code that rely on services provided by VisualStudio.
-        /// </summary>
         protected override void Initialize()
         {
             base.Initialize();
@@ -72,7 +57,6 @@ namespace Careerbuilder.TrueGoTo
                 mcs.AddCommand(menuItem);
             }
         }
-        #endregion
 
         private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
         {
@@ -80,11 +64,6 @@ namespace Careerbuilder.TrueGoTo
                 yield return element;
         }
 
-        /// <summary>
-        /// This function is the callback used to execute a command when the a menu item is clicked.
-        /// See the Initialize method to see how the menu item is associated to this function using
-        /// the OleMenuCommandService service and the MenuCommand class.
-        /// </summary>
         private void MenuItemCallback(object sender, EventArgs e)
         {
             if (_DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
@@ -135,13 +114,20 @@ namespace Careerbuilder.TrueGoTo
                     return codeElements[0];
 
                 activeNamespaces = TrueGoToPackage.ConvertToElementArray<CodeElement>(_DTE.ActiveDocument.ProjectItem.FileCodeModel.CodeElements)
-                    .Where(e => whiteList.Contains(e.Kind))
-                    .Select(e => e.Name).ToList();
+                    .Where(e => whiteList.Contains(e.Kind)).Select(e => ((CodeImport)e).Namespace).ToList();
 
-                return codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))).FirstOrDefault();
+                return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
 
             }
             return null;
+        }
+
+        private CodeElement HandleFunctionResultSet(IEnumerable<CodeElement> elements)
+        {
+            if (elements.All(e => e.Kind != vsCMElement.vsCMElementFunction))
+                return elements.FirstOrDefault();
+            else
+                return elements.FirstOrDefault();
         }
 
         private List<CodeElement> NavigateProjects(Projects projects)
