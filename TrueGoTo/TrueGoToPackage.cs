@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -6,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -47,7 +49,7 @@ namespace Careerbuilder.TrueGoTo
         public TrueGoToPackage()
         {
         }
-        
+
         #region Overridden Package Members
 
         /// <summary>
@@ -72,6 +74,12 @@ namespace Careerbuilder.TrueGoTo
         }
         #endregion
 
+        private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
+        {
+            foreach (T element in list)
+                yield return element;
+        }
+
         /// <summary>
         /// This function is the callback used to execute a command when the a menu item is clicked.
         /// See the Initialize method to see how the menu item is associated to this function using
@@ -81,67 +89,104 @@ namespace Careerbuilder.TrueGoTo
         {
             if (_DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
             {
-                EnvDTE.TextSelection selectedText = (EnvDTE.TextSelection)_DTE.ActiveDocument.Selection;
-                string target = selectedText.Text;
-                CodeElement targetElement = selectedText.ActivePoint.get_CodeElement(vsCMElement.vsCMElementDeclareDecl);
+                TextSelection selectedText = (TextSelection)_DTE.ActiveDocument.Selection;
+                string target = GetWordFromSelection(selectedText);
                 if (!String.IsNullOrWhiteSpace(target))
                 {
-                    List<CodeElement> codeElements = getAllTypesInSolution(_DTE.Solution.Projects);
-                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName,target, RegexOptions.IgnoreCase).Success).ToList();
-                    //_applicationObject.ExecuteCommand("Edit.NavigateTo");
-                    //_applicationObject.ExecuteCommand("Edit.GoToDefinition");
+                    List<CodeElement> codeElements = NavigateProjects(_DTE.Solution.Projects);
+                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName, target, RegexOptions.IgnoreCase).Success).ToList();
                 }
                 return;
             }
         }
 
-        private List<CodeElement> getAllTypesInSolution(Projects items)
+        private string GetWordFromSelection(TextSelection selection)
+        {
+            string target = selection.Text;
+
+            selection.WordLeft(true);
+            if (String.IsNullOrWhiteSpace(target) || Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
+            {
+                return selection.Text;
+            }
+
+            selection.WordRight();
+            if (Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
+            {
+                return selection.Text;
+            }
+
+            return target;
+        }
+
+        private List<CodeElement> NavigateProjects(Projects projects)
         {
             List<CodeElement> types = new List<CodeElement>();
-            foreach (Project p in items)
+
+            foreach (Project p in projects)
             {
-                types.AddRange(getAllTypesInSolution(p.ProjectItems));
+                types.AddRange(NavigateProjectItems(p.ProjectItems));
             }
+
             return types;
         }
 
-        private CodeElement[] getAllTypesInSolution(ProjectItems items)
+        private CodeElement[] NavigateProjectItems(ProjectItems items)
         {
-            List<CodeElement> elements = new List<CodeElement>();
+            List<CodeElement> codeElements = new List<CodeElement>();
 
-            foreach (ProjectItem p in items)
+            if (items != null)
             {
-                if (p.ProjectItems != null && p.ProjectItems.Count > 0)
-                    elements.AddRange(getAllTypesInSolution(p.ProjectItems).ToList() ?? new List<CodeElement>());
-
-                if (p.ContainingProject.CodeModel != null)
+                foreach (ProjectItem item in items)
                 {
-                    elements.AddRange(getAllCodeElementsInCodeElements(p.ContainingProject.CodeModel.CodeElements));
+                    if (item.SubProject != null)
+                        codeElements.AddRange(NavigateProjectItems(item.SubProject.ProjectItems));
+                    else
+                        codeElements.AddRange(NavigateProjectItems(item.ProjectItems));
+
+                    if (item.FileCodeModel != null)
+                        codeElements.AddRange(NavigateCodeElements(item.FileCodeModel.CodeElements));
                 }
             }
-            return elements.ToArray();
+
+            return codeElements.ToArray();
         }
 
-        private CodeElement[] getAllCodeElementsInCodeElements(CodeElements elementList)
+        private CodeElement[] NavigateCodeElements(CodeElements elements)
         {
-            List<CodeElement> elements = new List<CodeElement>();
+            List<CodeElement> codeElements = new List<CodeElement>();
             CodeElements members = null;
-            foreach (CodeElement elm in elementList)
+
+            if (elements != null)
             {
-                if (elm.IsCodeType)
+                foreach (CodeElement element in elements)
                 {
-                    if (elm.Kind != vsCMElement.vsCMElementDelegate)
-                        members = ((CodeType)elm).Members;
+                    if (element.Kind != vsCMElement.vsCMElementDelegate)
+                    {
+                        members = GetMembers(element);
 
-                    if (members != null && members.Count > 0)
-                        elements.AddRange(getAllCodeElementsInCodeElements(members) ?? new CodeElement[0]);
+                        if (members != null)
+                            codeElements.AddRange(NavigateCodeElements(members));
+                    }
 
-                    if (!blackList.Contains(elm.Kind))
-                        elements.Add(elm);
+                    if (!blackList.Contains(element.Kind) && element.IsCodeType)
+                        codeElements.Add(element);
                 }
             }
 
-            return elements.ToArray();
+            return codeElements.ToArray();
+        }
+
+        private CodeElements GetMembers(CodeElement element)
+        {
+            if (element is CodeNamespace)
+                return ((CodeNamespace)element).Members;
+            else if (element is CodeType)
+                return ((CodeType)element).Members;
+            else if (element is CodeFunction)
+                return ((CodeFunction)element).Parameters;
+            else
+                return null;
         }
 
         private void AddHandlers()
