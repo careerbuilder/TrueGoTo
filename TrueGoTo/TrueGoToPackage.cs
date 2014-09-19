@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
-using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
@@ -22,16 +21,13 @@ namespace Careerbuilder.TrueGoTo
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
-    public sealed class TrueGoToPackage : Package, IVsSolutionEvents
+    public sealed class TrueGoToPackage : Package
     {
         private DTE2 _DTE;
         private object _solutionElementsLock;
         private CodeModelEvents _codeEvents;
-        private UInt32 _solutionEventsCookie;
-        private bool _isInitialized;
-        private int _loadedProjectCount;
-        private int _maxProjectCount;
         private List<CodeElement> _solutionElements;
+        private bool _isInitialized;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
         public TrueGoToPackage() 
@@ -45,7 +41,13 @@ namespace Careerbuilder.TrueGoTo
         {
             base.Initialize();
             _DTE = (DTE2)GetService(typeof(DTE));
+            IVsSolution4 ivsSolution4 = GetService(typeof(SVsSolution)) as IVsSolution4;
+
+            ivsSolution4.EnsureSolutionIsLoaded(Convert.ToUInt32(__VSBSLFLAGS.VSBSLFLAGS_LoadAllPendingProjects));
             AddHandlers();
+            System.Threading.Thread thread = new System.Threading.Thread(new ThreadStart(NavigateProjects));
+            thread.Start();
+
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
             {
@@ -155,16 +157,23 @@ namespace Careerbuilder.TrueGoTo
             currentPoint.MoveToDisplayColumn(definingElement.StartPoint.Line, definingElement.StartPoint.DisplayColumn);
         }
 
-        private List<CodeElement> NavigateProjects(Projects projects)
+        private void NavigateProjects()
         {
             List<CodeElement> types = new List<CodeElement>();
-
-            foreach (Project p in projects)
+            try
             {
-                types.AddRange(NavigateProjectItems(p.ProjectItems));
+                foreach (Project p in _DTE.Solution.Projects)
+                {
+                    types.AddRange(NavigateProjectItems(p.ProjectItems));
+                }
             }
+            catch (COMException) { }
 
-            return types;
+            lock (_solutionElementsLock)
+            {
+                _isInitialized = true;
+                _solutionElements.AddRange(types);
+            }
         }
 
         private CodeElement[] NavigateProjectItems(ProjectItems items)
@@ -225,19 +234,13 @@ namespace Careerbuilder.TrueGoTo
 
         private void AddHandlers()
         {
-            Events2 events2;
-            events2 = (Events2)_DTE.Events;
+            EnvDTE80.Events2 events2;
+            events2 = (EnvDTE80.Events2)_DTE.Events;
             _codeEvents = events2.get_CodeModelEvents();
 
             _codeEvents.ElementAdded += new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
             _codeEvents.ElementChanged += new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
             _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
-
-            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-            if (ivsSolution != null)
-            {
-                ivsSolution.AdviseSolutionEvents(this, out _solutionEventsCookie);
-            }
         }
 
         private void AddedEventHandler(CodeElement element)
@@ -264,76 +267,11 @@ namespace Careerbuilder.TrueGoTo
             }
         }
 
-        public int OnAfterCloseSolution(object pUnkReserved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterLoadProject(IVsHierarchy pStubHierarchy, IVsHierarchy pRealHierarchy)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterOpenProject(IVsHierarchy pHierarchy, int fAdded)
-        {
-            _loadedProjectCount++;
-            if (_loadedProjectCount == _maxProjectCount)
-            {
-                lock (_solutionElementsLock)
-                {
-                    _solutionElements = NavigateProjects(_DTE.Solution.Projects);
-                }
-            }
-            return VSConstants.S_OK;
-        }
-
-        public int OnAfterOpenSolution(object pUnkReserved, int fNewSolution)
-        {
-            _maxProjectCount = _DTE.Solution.Projects.Count;
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeCloseProject(IVsHierarchy pHierarchy, int fRemoved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeCloseSolution(object pUnkReserved)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnBeforeUnloadProject(IVsHierarchy pRealHierarchy, IVsHierarchy pStubHierarchy)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryCloseProject(IVsHierarchy pHierarchy, int fRemoving, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryCloseSolution(object pUnkReserved, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
-        public int OnQueryUnloadProject(IVsHierarchy pRealHierarchy, ref int pfCancel)
-        {
-            return VSConstants.S_OK;
-        }
-
         private void RemoveHandlers()
         {
             _codeEvents.ElementAdded -= new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
             _codeEvents.ElementChanged -= new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
             _codeEvents.ElementDeleted -= new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
-
-            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-            if (_solutionEventsCookie != 0 && ivsSolution != null)
-            {
-                ivsSolution.UnadviseSolutionEvents(_solutionEventsCookie);
-            }
         }
     }
 }
