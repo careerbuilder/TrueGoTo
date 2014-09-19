@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -6,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -72,6 +74,12 @@ namespace Careerbuilder.TrueGoTo
         }
         #endregion
 
+        private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
+        {
+            foreach (T element in list)
+                yield return element;
+        }
+
         /// <summary>
         /// This function is the callback used to execute a command when the a menu item is clicked.
         /// See the Initialize method to see how the menu item is associated to this function using
@@ -81,25 +89,45 @@ namespace Careerbuilder.TrueGoTo
         {
             if (_DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
             {
-                EnvDTE.TextSelection selectedText = (EnvDTE.TextSelection)_DTE.ActiveDocument.Selection;
-                string target = selectedText.Text;
-                CodeElement targetElement = selectedText.ActivePoint.get_CodeElement(vsCMElement.vsCMElementDeclareDecl);
+                TextSelection selectedText = (TextSelection)_DTE.ActiveDocument.Selection;
+                string target = GetWordFromSelection(selectedText);
                 if (!String.IsNullOrWhiteSpace(target))
                 {
                     List<CodeElement> codeElements = NavigateProjects(_DTE.Solution.Projects);
-                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName,target, RegexOptions.IgnoreCase).Success).ToList();
+                    List<CodeElement> targetElements = codeElements.Where(t => Regex.Match(t.FullName, target, RegexOptions.IgnoreCase).Success).ToList();
                 }
                 return;
             }
         }
 
+        private string GetWordFromSelection(TextSelection selection)
+        {
+            string target = selection.Text;
+
+            selection.WordLeft(true);
+            if (String.IsNullOrWhiteSpace(target) || Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
+            {
+                return selection.Text;
+            }
+
+            selection.WordRight();
+            if (Regex.Match(target, selection.Text, RegexOptions.IgnoreCase).Success)
+            {
+                return selection.Text;
+            }
+
+            return target;
+        }
+
         private List<CodeElement> NavigateProjects(Projects projects)
         {
             List<CodeElement> types = new List<CodeElement>();
+
             foreach (Project p in projects)
             {
                 types.AddRange(NavigateProjectItems(p.ProjectItems));
             }
+
             return types;
         }
 
@@ -113,8 +141,8 @@ namespace Careerbuilder.TrueGoTo
                 {
                     if (item.SubProject != null)
                         codeElements.AddRange(NavigateProjectItems(item.SubProject.ProjectItems));
-
-                    codeElements.AddRange(NavigateProjectItems(item.ProjectItems));
+                    else
+                        codeElements.AddRange(NavigateProjectItems(item.ProjectItems));
 
                     if (item.FileCodeModel != null)
                         codeElements.AddRange(NavigateCodeElements(item.FileCodeModel.CodeElements));
