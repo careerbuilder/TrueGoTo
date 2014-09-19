@@ -85,7 +85,7 @@ namespace Careerbuilder.TrueGoTo
                 if (!String.IsNullOrWhiteSpace(target))
                 {
                     List<CodeElement> codeElements = getAllTypesInSolution(_DTE.Solution.Projects);
-                    List<CodeElement> targetElements = codeElements.Where(t => t.get_FullName().Contains(target)).ToList();
+                    List<CodeElement> targetElements = codeElements.Where(t => t.FullName.Contains(target)).ToList();
                     //_applicationObject.ExecuteCommand("Edit.NavigateTo");
                     //_applicationObject.ExecuteCommand("Edit.GoToDefinition");
                 }
