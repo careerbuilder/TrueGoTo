@@ -38,7 +38,8 @@ namespace Careerbuilder.TrueGoTo
 
         public void AddElement(CodeElement toAdd)
         {
-            elements.Add(toAdd);
+            if (!_blackList.Contains(toAdd.Kind))
+                elements.Add(toAdd);
         }
 
         public void RemoveElement(CodeElement toRemove)

@@ -55,15 +55,15 @@ namespace Careerbuilder.TrueGoTo
 
         private void HackThatDef()
         {
-            string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection); // Not grabbing current word
+            string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection);
             _dte.ExecuteCommand("Edit.GoToDefinition");
             string name = _dte.ActiveDocument.Name;
-            string elementName = name.Substring(0, name.Length - 3) + "." + startWord; // Only add word if it's not the class?
+            string elementPath = name.Substring(0, name.Length - 3);
             name = _dte.ActiveDocument.ActiveWindow.Caption;
             CodeElement targetElement = null;
             if (name.Contains("from metadata"))
             {
-                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementName);
+                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
             }
             if (targetElement != null)
             {
