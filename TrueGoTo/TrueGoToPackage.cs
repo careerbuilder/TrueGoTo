@@ -7,51 +7,35 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using EnvDTE;
 using EnvDTE80;
-using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 
 namespace Careerbuilder.TrueGoTo
 {
     [PackageRegistration(UseManagedResourcesOnly = true)]
-    [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _DTE;
-        private object _solutionElementsLock;
         private CodeModelEvents _codeEvents;
+        private SolutionListener _solutionEvents;
         private List<CodeElement> _solutionElements;
-        private System.Timers.Timer _timer;
         private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute };
 
-        public TrueGoToPackage() 
-        {
-            _solutionElements = new List<CodeElement>();
-            _solutionElementsLock = new object();
-        }
+        public TrueGoToPackage() { }
 
         protected override void Initialize()
         {
             base.Initialize();
             _DTE = (DTE2)GetService(typeof(DTE));
-            IVsSolution4 ivsSolution4 = GetService(typeof(SVsSolution)) as IVsSolution4;
-            
-            ivsSolution4.EnsureSolutionIsLoaded(Convert.ToUInt32(__VSBSLFLAGS.VSBSLFLAGS_LoadAllPendingProjects));
-            AddHandlers();
-
-            _timer = new System.Timers.Timer();
-            _timer.Interval = 500; 
-            _timer.AutoReset = true;
-            _timer.Elapsed += new ElapsedEventHandler(TimerElapsed);
-            _timer.Start();
+            _solutionEvents = new SolutionListener(GetService(typeof(SVsSolution)) as IVsSolution);
+            _solutionElements = NavigateProjects(_DTE.Solution.Projects);
+            //_solutionEvents.OnAfterOpenSolution(null, null) += () => { _isSolutionLoaded = true; };
 
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
@@ -62,47 +46,6 @@ namespace Careerbuilder.TrueGoTo
             }
         }
 
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            RemoveHandlers();
-            for (int i = 0; i < _solutionElements.Count(); i++)
-            {
-                _solutionElements[i] = null;
-            }
-            _solutionElements = null;
-            _codeEvents = null;
-        }
-
-        private void TimerElapsed(object sender, ElapsedEventArgs e)
-        {
-            if (isSolutionFullyLoaded())
-            {
-                _timer.Stop();
-                lock (_solutionElementsLock)
-                {
-                    try
-                    {
-                        if (_timer.Enabled == false)
-                            _solutionElements = NavigateProjects(_DTE.Solution.Projects);
-                    }
-                    catch (COMException) { } // Closed solution during navigation
-                }
-            }
-        }
-
-        private bool isSolutionFullyLoaded()
-        {   
-            IVsSolution ivsSolution = GetService(typeof(SVsSolution)) as IVsSolution;
-            object retVar = null;
-            if (ivsSolution != null)
-            {
-                ivsSolution.GetProperty((int)__VSPROPID4.VSPROPID_IsSolutionFullyLoaded, out retVar);
-            }
-            
-            return (bool)(retVar ?? false);
-        }
-
         private static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
         {
             foreach (T element in list)
@@ -111,26 +54,20 @@ namespace Careerbuilder.TrueGoTo
 
         private void MenuItemCallback(object sender, EventArgs e)
         {
-            if (isSolutionFullyLoaded() && _DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
+            if (_DTE.Solution.IsOpen && _DTE.ActiveDocument != null && _DTE.ActiveDocument.Selection != null)
             {
                 TextSelection selectedText = (TextSelection)_DTE.ActiveDocument.Selection;
                 string target = GetWordFromSelection(selectedText);
-                CodeElement targetElement = null;
                 if (!String.IsNullOrWhiteSpace(target))
                 {
-                    lock (_solutionElementsLock)
-                    {
-                        targetElement = ReduceResultSet(_solutionElements, target);
-                    }
+                    CodeElement targetElement = ReduceResultSet(_solutionElements, target);
                     if (targetElement != null)
-                    {
                         ChangeActiveDocument(targetElement);
-                        return;
-                    }
+                    else
+                        _DTE.ExecuteCommand("Edit.GoToDefinition");
                 }
+                return;
             }
-            
-            _DTE.ExecuteCommand("Edit.GoToDefinition");
         }
 
         private string GetWordFromSelection(TextSelection selection)
@@ -166,10 +103,7 @@ namespace Careerbuilder.TrueGoTo
                     return codeElements[0];
                 activeNamespaces = TrueGoToPackage.ConvertToElementArray<CodeElement>(_DTE.ActiveDocument.ProjectItem.FileCodeModel.CodeElements)
                     .Where(e => whiteList.Contains(e.Kind)).Select(e => ((CodeImport)e).Namespace).ToList();
-                if (activeNamespaces.Count > 0)
-                    return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
-                else
-                    return HandleFunctionResultSet(codeElements);
+                return HandleFunctionResultSet(codeElements.Where(e => activeNamespaces.Any(a => e.FullName.Contains(a))));
             }
             return null;
         }
@@ -261,8 +195,8 @@ namespace Careerbuilder.TrueGoTo
 
         private void AddHandlers()
         {
-            Events2 events2;
-            events2 = (Events2)_DTE.Events;
+            EnvDTE80.Events2 events2;
+            events2 = (EnvDTE80.Events2)_DTE.Events;
             _codeEvents = events2.get_CodeModelEvents();
 
             _codeEvents.ElementAdded += new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
@@ -270,28 +204,19 @@ namespace Careerbuilder.TrueGoTo
             _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
         }
 
-        private void AddedEventHandler(CodeElement element)
+        private void AddedEventHandler(CodeElement Element)
         {
-            lock (_solutionElementsLock)
-            {
-                _solutionElements.Add(element);
-            }
+            throw new NotImplementedException();
         }
 
-        private void ChangedEventHandler(CodeElement element, vsCMChangeKind change)
+        private void ChangedEventHandler(CodeElement Element, vsCMChangeKind Change)
         {
-            lock (_solutionElementsLock)
-            {
-                _solutionElements.Add(element);
-            }
+            throw new NotImplementedException();
         }
 
-        private void DeletedEventHandler(object parent, CodeElement element)
+        private void DeletedEventHandler(object Parent, CodeElement Element)
         {
-            lock (_solutionElementsLock)
-            {
-                _solutionElements.Remove(element);
-            }
+            throw new NotImplementedException();
         }
 
         private void RemoveHandlers()
