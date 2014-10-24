@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
@@ -18,9 +19,9 @@ namespace Careerbuilder.TrueGoTo
         public event Action AfterSolutionLoaded;
         public event Action BeforeSolutionClosed;
 
-        public SolutionListener(IVsSolution solution)
+        public SolutionListener(IVsSolution solution, Projects projects)
         {
-            AfterSolutionLoaded += () => { };
+            AfterSolutionLoaded += () => { SolutionNavigator.Navigate(projects); };
             BeforeSolutionClosed += () => { };
 
             activeSolution = solution;
