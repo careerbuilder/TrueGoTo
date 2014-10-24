@@ -39,20 +39,18 @@ namespace Careerbuilder.TrueGoTo
             return target;
         }
 
-        public static CodeElement ReduceResultSet(DTE2 dte, List<CodeElement> elements, string target)
+        public static CodeElement ReduceResultSet(DTE2 dte, List<CodeElement> elements, string targetPath, string targetName)
         {
             List<CodeElement> codeElements = new List<CodeElement>();
-            List<vsCMElement> nonFullnamers = new List<vsCMElement>();
-            CodeElement temp = elements.First();
-            target = target.ToLower();
-            Type eleType = typeof(CodeElement);
-            foreach (CodeElement ele in elements)
-            {
-                if (ele.FullName.ToLower() == target)
-                    codeElements.Add(ele);
-            }
             List<string> activeNamespaces = new List<string>();
             vsCMElement[] whiteList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementIncludeStmt };
+            string target = targetPath.ToLower() + targetName .ToLower();
+            
+            foreach (CodeElement ele in elements)
+            {
+                if (ele.FullName.ToLower() == targetPath.ToLower() || ele.FullName.ToLower() == target)
+                    codeElements.Add(ele);
+            }            
 
             if (codeElements != null && codeElements.Count > 0)
             {
@@ -70,7 +68,10 @@ namespace Careerbuilder.TrueGoTo
             if (elements.All(e => e.Kind != vsCMElement.vsCMElementFunction))
                 return elements.FirstOrDefault();
             else
+            {
+                // Need to fix this!
                 return elements.FirstOrDefault();
+            }
         }
     }
 }
