@@ -43,13 +43,7 @@ namespace Careerbuilder.TrueGoTo
         { return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnBeforeCloseSolution(object pUnkReserved)
-        {
-            activeSolution.UnadviseSolutionEvents(cookie);
-            activeSolution = null;
-            activeProjects = null;
-            cookie = 0;
-            return VSConstants.S_OK; 
-        }
+        { return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnBeforeUnloadProject(IVsHierarchy pRealHierarchy, IVsHierarchy pStubHierarchy)
         { return VSConstants.S_OK; }
