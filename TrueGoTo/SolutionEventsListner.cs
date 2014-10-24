@@ -11,24 +11,20 @@ using Microsoft.VisualStudio.Shell.Interop;
 
 namespace Careerbuilder.TrueGoTo
 {
-    public class SolutionListener : IVsSolutionEvents, IDisposable
+    public sealed class SolutionListener : IVsSolutionEvents
     {
         private IVsSolution activeSolution;
+        private Projects activeProjects;
         private uint cookie;
-
-        public event Action AfterSolutionLoaded;
-        public event Action BeforeSolutionClosed;
 
         public SolutionListener(IVsSolution solution, Projects projects)
         {
-            AfterSolutionLoaded += () => { SolutionNavigator.Navigate(projects); };
-            BeforeSolutionClosed += () => { };
-
             activeSolution = solution;
             if (activeSolution != null)
             {
                 activeSolution.AdviseSolutionEvents(this, out cookie);
             }
+            activeProjects = projects;
         }
 
         int IVsSolutionEvents.OnAfterCloseSolution(object pUnkReserved)
@@ -41,13 +37,19 @@ namespace Careerbuilder.TrueGoTo
         { return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnAfterOpenSolution(object pUnkReserved, int fNewSolution)
-        { AfterSolutionLoaded(); return VSConstants.S_OK; }
+        { SolutionNavigator.Navigate(activeProjects); return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnBeforeCloseProject(IVsHierarchy pHierarchy, int fRemoved)
         { return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnBeforeCloseSolution(object pUnkReserved)
-        { BeforeSolutionClosed(); return VSConstants.S_OK; }
+        {
+            activeSolution.UnadviseSolutionEvents(cookie);
+            activeSolution = null;
+            activeProjects = null;
+            cookie = 0;
+            return VSConstants.S_OK; 
+        }
 
         int IVsSolutionEvents.OnBeforeUnloadProject(IVsHierarchy pRealHierarchy, IVsHierarchy pStubHierarchy)
         { return VSConstants.S_OK; }
@@ -61,17 +63,5 @@ namespace Careerbuilder.TrueGoTo
         int IVsSolutionEvents.OnQueryUnloadProject(IVsHierarchy pRealHierarchy, ref int pfCancel)
         { return VSConstants.S_OK; }
 
-        public void Dispose()
-        {
-            if (activeSolution != null && cookie != 0)
-            {
-                GC.SuppressFinalize(this);
-                activeSolution.UnadviseSolutionEvents(cookie);
-                AfterSolutionLoaded = null;
-                BeforeSolutionClosed = null;
-                cookie = 0;
-                activeSolution = null;
-            }
-        }
     }
 }
