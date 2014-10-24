@@ -13,6 +13,7 @@ using Microsoft.VisualStudio.Shell.Interop;
 namespace Careerbuilder.TrueGoTo
 {
     [PackageRegistration(UseManagedResourcesOnly = true)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
@@ -21,7 +22,6 @@ namespace Careerbuilder.TrueGoTo
         private DTE2 _dte;
         private CodeModelEvents _codeEvents;
         private SolutionListener _solutionEvents;
-        private List<CodeElement> _solutionElements;
 
         public TrueGoToPackage() { }
 
@@ -44,6 +44,10 @@ namespace Careerbuilder.TrueGoTo
         {
             if (_dte.Solution.IsOpen && _dte.ActiveDocument != null && _dte.ActiveDocument.Selection != null)
             {
+                if (!(SolutionNavigator.getInstance().Elements.Count > 0))
+                {
+                    SolutionNavigator.Navigate(_dte.Solution.Projects);
+                }
                 TextSelection selectedText = (TextSelection)_dte.ActiveDocument.Selection;
                 HackThatDef();
                 return;
@@ -60,7 +64,7 @@ namespace Careerbuilder.TrueGoTo
             CodeElement targetElement = null;
             if (name.Contains("from metadata"))
             {
-                targetElement = HelperElves.ReduceResultSet(_dte, _solutionElements, elementName);
+                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementName);
             }
             if (targetElement != null)
             {
