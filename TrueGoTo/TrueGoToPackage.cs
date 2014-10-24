@@ -48,7 +48,6 @@ namespace Careerbuilder.TrueGoTo
                 {
                     SolutionNavigator.Navigate(_dte.Solution.Projects);
                 }
-                TextSelection selectedText = (TextSelection)_dte.ActiveDocument.Selection;
                 HackThatDef();
                 return;
             }
@@ -56,8 +55,8 @@ namespace Careerbuilder.TrueGoTo
 
         private void HackThatDef()
         {
-            _dte.ExecuteCommand("Edit.GoToDefinition");
             string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection); // Not grabbing current word
+            _dte.ExecuteCommand("Edit.GoToDefinition");
             string name = _dte.ActiveDocument.Name;
             string elementName = name.Substring(0, name.Length - 3) + "." + startWord; // Only add word if it's not the class?
             name = _dte.ActiveDocument.ActiveWindow.Caption;
