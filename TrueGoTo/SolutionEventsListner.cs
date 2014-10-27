@@ -13,22 +13,29 @@ namespace Careerbuilder.TrueGoTo
 {
     public sealed class SolutionListener : IVsSolutionEvents
     {
-        private IVsSolution activeSolution;
-        private Projects activeProjects;
         private uint cookie;
+        private DTE2 _dte;
+        private CodeModelEvents _codeEvents;
 
-        public SolutionListener(IVsSolution solution, Projects projects)
+        public SolutionListener(IVsSolution solution, DTE2 dte)
         {
-            activeSolution = solution;
-            if (activeSolution != null)
+            if (solution != null)
             {
-                activeSolution.AdviseSolutionEvents(this, out cookie);
+                solution.AdviseSolutionEvents(this, out cookie);
             }
-            activeProjects = projects;
+            if (dte != null)
+            {
+                _dte = dte;
+                _codeEvents = ((Events2)dte.Events).get_CodeModelEvents();
+            }
         }
 
         int IVsSolutionEvents.OnAfterCloseSolution(object pUnkReserved)
-        { return VSConstants.S_OK; }
+        { 
+            SolutionNavigator.getInstance().IsNavigated = false;
+            RemoveCodeElementHandlers();
+            return VSConstants.S_OK; 
+        }
 
         int IVsSolutionEvents.OnAfterLoadProject(IVsHierarchy pStubHierarchy, IVsHierarchy pRealHierarchy)
         { return VSConstants.S_OK; }
@@ -37,7 +44,11 @@ namespace Careerbuilder.TrueGoTo
         { return VSConstants.S_OK; }
 
         int IVsSolutionEvents.OnAfterOpenSolution(object pUnkReserved, int fNewSolution)
-        { SolutionNavigator.Navigate(activeProjects); return VSConstants.S_OK; }
+        { 
+            SolutionNavigator.Navigate(_dte.Solution.Projects);
+            AddCodeElementHandlers();
+            return VSConstants.S_OK; 
+        }
 
         int IVsSolutionEvents.OnBeforeCloseProject(IVsHierarchy pHierarchy, int fRemoved)
         { return VSConstants.S_OK; }
@@ -56,6 +67,38 @@ namespace Careerbuilder.TrueGoTo
 
         int IVsSolutionEvents.OnQueryUnloadProject(IVsHierarchy pRealHierarchy, ref int pfCancel)
         { return VSConstants.S_OK; }
+
+        private void AddCodeElementHandlers()
+        {
+            _codeEvents.ElementAdded += new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
+            _codeEvents.ElementChanged += new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
+            _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
+        }
+
+        private void AddedEventHandler(CodeElement Element)
+        {
+            SolutionNavigator.AddElement(Element);
+        }
+
+        private void ChangedEventHandler(CodeElement Element, vsCMChangeKind Change)
+        {
+            if (Change == vsCMChangeKind.vsCMChangeKindRename || Change == vsCMChangeKind.vsCMChangeKindUnknown)
+            {
+                SolutionNavigator.AddElement(Element);
+            }
+        }
+
+        private void DeletedEventHandler(object Parent, CodeElement Element)
+        {
+            SolutionNavigator.RemoveElement(Element);
+        }
+
+        private void RemoveCodeElementHandlers()
+        {
+            _codeEvents.ElementAdded -= new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
+            _codeEvents.ElementChanged -= new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
+            _codeEvents.ElementDeleted -= new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
+        }
 
     }
 }
