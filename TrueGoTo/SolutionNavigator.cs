@@ -8,11 +8,18 @@ namespace Careerbuilder.TrueGoTo
     {
         private static SolutionNavigator singleton;
 
-        private readonly vsCMElement[] _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute, vsCMElement.vsCMElementParameter };
-        private List<CodeElement> elements = new List<CodeElement>();
+        private readonly vsCMElement[] _blackList;
+        private List<CodeElement> _elements;
+        private bool _isNavigated;
 
-        private SolutionNavigator() {}
+        private SolutionNavigator() 
+        {
+            _blackList = new vsCMElement[] { vsCMElement.vsCMElementImportStmt, vsCMElement.vsCMElementUsingStmt, vsCMElement.vsCMElementAttribute, vsCMElement.vsCMElementParameter };
+            _elements = new List<CodeElement>();
+            _isNavigated = false;
+        }
 
+        #region "Static Functions"
         public static SolutionNavigator getInstance()
         {
             if (singleton == null)
@@ -25,29 +32,55 @@ namespace Careerbuilder.TrueGoTo
         public static List<CodeElement> Navigate(Projects projects)
         {
             SolutionNavigator.getInstance().NavigateProjects(projects);
+            SolutionNavigator.getInstance().IsNavigated = true;
             return singleton.Elements;
+        }
+
+        public static void AddElement(CodeElement toAdd)
+        {
+            if (!SolutionNavigator.getInstance().BlackList.Contains(toAdd.Kind))
+                SolutionNavigator.getInstance().Elements.Add(toAdd);
+        }
+
+        public static void RemoveElement(CodeElement toRemove)
+        {
+            if (SolutionNavigator.getInstance().Elements.Contains(toRemove))
+                SolutionNavigator.getInstance().Elements.Remove(toRemove);
+        }
+        #endregion
+
+        #region "Properties"
+        public vsCMElement[] BlackList
+        {
+            get
+            {
+                return _blackList;
+            }
         }
 
         public List<CodeElement> Elements
         {
             get
             {
-                return elements;
+                return _elements;
             }
         }
 
-        public void AddElement(CodeElement toAdd)
+        public bool IsNavigated
         {
-            if (!_blackList.Contains(toAdd.Kind))
-                elements.Add(toAdd);
-        }
+            get
+            {
+                return _isNavigated;
+            }
 
-        public void RemoveElement(CodeElement toRemove)
-        {
-            if (elements.Contains(toRemove))
-                elements.Remove(toRemove);
+            set
+            {
+                _isNavigated = value && _elements.Count > 0;
+            }
         }
+        #endregion
 
+        #region "Singleton Functions"
         private void NavigateProjects(Projects projects)
         {
             List<CodeElement> types = new List<CodeElement>();
@@ -57,7 +90,7 @@ namespace Careerbuilder.TrueGoTo
                 types.AddRange(NavigateProjectItems(p.ProjectItems));
             }
 
-            elements = types;
+            _elements = types;
         }
 
         private CodeElement[] NavigateProjectItems(ProjectItems items)
@@ -116,4 +149,5 @@ namespace Careerbuilder.TrueGoTo
                 return null;
         }
     }
+    #endregion
 }

@@ -13,15 +13,14 @@ using Microsoft.VisualStudio.Shell.Interop;
 namespace Careerbuilder.TrueGoTo
 {
     [PackageRegistration(UseManagedResourcesOnly = true)]
-    [ProvideAutoLoad(UIContextGuids80.SolutionExists)]
-    [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects)]
+    [InstalledProductRegistration("#110", "#112", "1.1", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _dte;
-        private CodeModelEvents _codeEvents;
-        private SolutionListener _solutionEvents;
 
         public TrueGoToPackage() { }
 
@@ -29,7 +28,7 @@ namespace Careerbuilder.TrueGoTo
         {
             base.Initialize();
             _dte = (DTE2)GetService(typeof(DTE));
-            _solutionEvents = new SolutionListener(GetService(typeof(SVsSolution)) as IVsSolution, _dte.Solution.Projects);
+            SolutionListener _solutionEvents = new SolutionListener(GetService(typeof(SVsSolution)) as IVsSolution, _dte);
 
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
@@ -42,14 +41,13 @@ namespace Careerbuilder.TrueGoTo
 
         private void MenuItemCallback(object sender, EventArgs e)
         {
-            if (_dte.Solution.IsOpen && _dte.ActiveDocument != null && _dte.ActiveDocument.Selection != null)
+            if (SolutionNavigator.getInstance().IsNavigated && _dte.ActiveDocument != null && _dte.ActiveDocument.Selection != null)
             {
                 if (!(SolutionNavigator.getInstance().Elements.Count > 0))
                 {
                     SolutionNavigator.Navigate(_dte.Solution.Projects);
                 }
                 HackThatDef();
-                return;
             }
         }
 
@@ -78,42 +76,6 @@ namespace Careerbuilder.TrueGoTo
             window.Activate();
             TextSelection currentPoint = window.Document.Selection as TextSelection;
             currentPoint.MoveToDisplayColumn(definingElement.StartPoint.Line, definingElement.StartPoint.DisplayColumn);
-        }
-
-        private void AddHandlers()
-        {
-            EnvDTE80.Events2 events2;
-            events2 = (EnvDTE80.Events2)_dte.Events;
-            _codeEvents = events2.get_CodeModelEvents();
-
-            _codeEvents.ElementAdded += new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
-            _codeEvents.ElementChanged += new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
-            _codeEvents.ElementDeleted += new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
-        }
-
-        private void AddedEventHandler(CodeElement Element)
-        {
-            SolutionNavigator.getInstance().AddElement(Element);
-        }
-
-        private void ChangedEventHandler(CodeElement Element, vsCMChangeKind Change)
-        {
-            if (Change == vsCMChangeKind.vsCMChangeKindRename || Change == vsCMChangeKind.vsCMChangeKindUnknown)
-            {
-                SolutionNavigator.getInstance().AddElement(Element);
-            }
-        }
-
-        private void DeletedEventHandler(object Parent, CodeElement Element)
-        {
-            SolutionNavigator.getInstance().RemoveElement(Element);
-        }
-
-        private void RemoveHandlers()
-        {
-            _codeEvents.ElementAdded -= new _dispCodeModelEvents_ElementAddedEventHandler(AddedEventHandler);
-            _codeEvents.ElementChanged -= new _dispCodeModelEvents_ElementChangedEventHandler(ChangedEventHandler);
-            _codeEvents.ElementDeleted -= new _dispCodeModelEvents_ElementDeletedEventHandler(DeletedEventHandler);
         }
     }
 }

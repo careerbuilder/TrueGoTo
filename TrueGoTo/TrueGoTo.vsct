@@ -41,8 +41,8 @@
          must be a menu. -->
     <Groups>
 
-      <Group guid="guidTrueGoToCmdSet" id="MyMenuGroup" priority="0x0600">
-        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS"/>
+      <Group guid="guidTrueGoToCmdSet" id="MyMenuGroup" priority="0x0250">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN"/>
       </Group>
       
 
@@ -64,6 +64,8 @@
       <Button guid="guidTrueGoToCmdSet" id="cmdTrueGoTo" priority="0x0100" type="Button">
         <Parent guid="guidTrueGoToCmdSet" id="MyMenuGroup" />
         <Icon guid="guidImages" id="bmpPicSearch" />
+        <CommandFlag>DefaultDisabled</CommandFlag>
+        <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>TrueGoTo</ButtonText>
         </Strings>
