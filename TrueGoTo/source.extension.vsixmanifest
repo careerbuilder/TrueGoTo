@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="6070a2ca-c143-4ca8-bfb1-577b52c91d6b" Version="1.1" Language="en-US" Publisher="Careerbuilder" />
+    <Identity Id="6070a2ca-c143-4ca8-bfb1-577b52c91d6b" Version="1.2" Language="en-US" Publisher="Careerbuilder" />
     <DisplayName>TrueGoTo</DisplayName>
     <Description xml:space="preserve">An extension to actually Go To Definition instead of Go To (likely) Metadata</Description>
     <Icon>Search.ico</Icon>
