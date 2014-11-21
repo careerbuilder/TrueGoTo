@@ -22,7 +22,6 @@ namespace Careerbuilder.TrueGoTo
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _dte;
-        private bool _obWasOpen;
         
         public TrueGoToPackage() { }
 
@@ -57,7 +56,8 @@ namespace Careerbuilder.TrueGoTo
         {
             string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection);
             string currentDocument = _dte.ActiveDocument.Name;
-            _obWasOpen = GetObjectBrowser() != null;
+            Window objectBrowser = GetObjectBrowser();
+            bool OBWasOpen = (objectBrowser != null && objectBrowser.Visible);
             _dte.ExecuteCommand("Edit.GoToDefinition");
             string name = _dte.ActiveDocument.ActiveWindow.Caption;
             string elementPath = String.Empty;
@@ -65,14 +65,14 @@ namespace Careerbuilder.TrueGoTo
 
             if (name.Equals(currentDocument))   // VB to C# and some reference types
             {
-                Window objectBrowser = GetObjectBrowser();
-                if (objectBrowser != null)
+                objectBrowser = GetObjectBrowser();
+                if (objectBrowser != null && objectBrowser.Visible)
                 {
                     _dte.ExecuteCommand("Edit.Copy");
                     elementPath = Clipboard.GetText();
                     elementPath = elementPath.Substring(0, elementPath.LastIndexOf('.'));
 
-                    if (!_obWasOpen)
+                    if (!OBWasOpen)
                     {
                         objectBrowser.Close();
                     }
