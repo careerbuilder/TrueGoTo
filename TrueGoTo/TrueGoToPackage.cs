@@ -5,6 +5,7 @@ using System.ComponentModel.Design;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
@@ -15,13 +16,14 @@ namespace Careerbuilder.TrueGoTo
     [PackageRegistration(UseManagedResourcesOnly = true)]
     [ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject)]
     [ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects)]
-    [InstalledProductRegistration("#110", "#112", "1.1", IconResourceID = 400)]
+    [InstalledProductRegistration("#110", "#112", "1.2", IconResourceID = 400)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(GuidList.guidTrueGoToPkgString)]
     public sealed class TrueGoToPackage : Package
     {
         private DTE2 _dte;
-
+        private bool _obWasOpen;
+        
         public TrueGoToPackage() { }
 
         protected override void Initialize()
@@ -54,20 +56,53 @@ namespace Careerbuilder.TrueGoTo
         private void HackThatDef()
         {
             string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection);
+            string currentDocument = _dte.ActiveDocument.Name;
+            _obWasOpen = GetObjectBrowser() != null;
             _dte.ExecuteCommand("Edit.GoToDefinition");
-            string name = _dte.ActiveDocument.Name;
-            string elementPath = name.Substring(0, name.Length - 3);
-            name = _dte.ActiveDocument.ActiveWindow.Caption;
+            string name = _dte.ActiveDocument.ActiveWindow.Caption;
+            string elementPath = String.Empty;
             CodeElement targetElement = null;
-            if (name.Contains("from metadata"))
+
+            if (name.Equals(currentDocument))   // VB to C# and some reference types
             {
+                Window objectBrowser = GetObjectBrowser();
+                if (objectBrowser != null)
+                {
+                    _dte.ExecuteCommand("Edit.Copy");
+                    elementPath = Clipboard.GetText();
+                    elementPath = elementPath.Substring(0, elementPath.LastIndexOf('.'));
+
+                    if (!_obWasOpen)
+                    {
+                        objectBrowser.Close();
+                    }
+                }
+                
                 targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
+
+                if (targetElement != null)
+                {
+                    ChangeActiveDocument(targetElement);
+                }
+                
             }
-            if (targetElement != null)
+            else if (name.Contains("from metadata"))    // C# to VB and the rest of the reference types
             {
-                _dte.ActiveWindow.Close();
-                ChangeActiveDocument(targetElement);
+                elementPath = _dte.ActiveDocument.Name.Substring(0, _dte.ActiveDocument.Name.Length - 3);
+                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
+                
+                if (targetElement != null)
+                {
+                    _dte.ActiveWindow.Close();
+                    ChangeActiveDocument(targetElement);
+                }
             }
+        }
+
+        private Window GetObjectBrowser()
+        {
+            IEnumerable<Window> windows = HelperElves.ConvertToElementArray<Window>(_dte.Windows).Where(x => x.Caption.ToLower().Contains("object browser"));
+            return windows.FirstOrDefault();
         }
 
         private void ChangeActiveDocument(CodeElement definingElement)
@@ -76,6 +111,6 @@ namespace Careerbuilder.TrueGoTo
             window.Activate();
             TextSelection currentPoint = window.Document.Selection as TextSelection;
             currentPoint.MoveToDisplayColumn(definingElement.StartPoint.Line, definingElement.StartPoint.DisplayColumn);
-        }
+        }      
     }
 }
