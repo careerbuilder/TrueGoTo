@@ -20,7 +20,9 @@ namespace Careerbuilder.TrueGoTo
 
         public static string GetWordFromSelection(TextSelection selection)
         {
-            string target = selection.Text;
+            string target = selection.Text ?? String.Empty;
+            int line = selection.TopPoint.Line;
+            int offset = selection.TopPoint.LineCharOffset;
 
             selection.WordLeft(true);
             string leftWord = selection.Text;
@@ -32,11 +34,19 @@ namespace Careerbuilder.TrueGoTo
                 string selectedWord = leftWord + rightWord;
                 if (String.IsNullOrWhiteSpace(target) || Regex.Match(selectedWord, target, RegexOptions.IgnoreCase).Success)
                 {
+                    ResetSelection(selection, line, offset, target.Count());
                     return selectedWord.Trim();
                 }
             }
 
+            ResetSelection(selection, line, offset, target.Count());
             return target;
+        }
+
+        private static void ResetSelection(TextSelection selection, int lineNumber, int offset, int length)
+        {
+            selection.MoveToLineAndOffset(lineNumber, offset);
+            selection.CharRight(true, length);
         }
 
         public static CodeElement ReduceResultSet(DTE2 dte, List<CodeElement> elements, string targetPath, string targetName)
