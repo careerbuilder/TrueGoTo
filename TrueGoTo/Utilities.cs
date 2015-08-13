@@ -2,15 +2,13 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
 
 namespace Careerbuilder.TrueGoTo
 {
-    public class HelperElves
+    public static class Utilities
     {
         public static IEnumerable<T> ConvertToElementArray<T>(IEnumerable list)
         {
