@@ -54,7 +54,7 @@ namespace Careerbuilder.TrueGoTo
 
         private void HackThatDef()
         {
-            string startWord = HelperElves.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection);
+            string startWord = Utilities.GetWordFromSelection((TextSelection)_dte.ActiveDocument.Selection);
             string currentDocument = _dte.ActiveDocument.Name;
             Window objectBrowser = GetObjectBrowser();
             bool OBWasOpen = (objectBrowser != null && objectBrowser.Visible);
@@ -78,7 +78,7 @@ namespace Careerbuilder.TrueGoTo
                     }
                 }
                 
-                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
+                targetElement = Utilities.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
 
                 if (targetElement != null)
                 {
@@ -89,7 +89,7 @@ namespace Careerbuilder.TrueGoTo
             else if (name.Contains("from metadata"))    // C# to VB and the rest of the reference types
             {
                 elementPath = _dte.ActiveDocument.Name.Substring(0, _dte.ActiveDocument.Name.Length - 3);
-                targetElement = HelperElves.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
+                targetElement = Utilities.ReduceResultSet(_dte, SolutionNavigator.getInstance().Elements, elementPath, startWord);
                 
                 if (targetElement != null)
                 {
@@ -101,7 +101,7 @@ namespace Careerbuilder.TrueGoTo
 
         private Window GetObjectBrowser()
         {
-            IEnumerable<Window> windows = HelperElves.ConvertToElementArray<Window>(_dte.Windows).Where(x => x.Caption.ToLower().Contains("object browser"));
+            IEnumerable<Window> windows = Utilities.ConvertToElementArray<Window>(_dte.Windows).Where(x => x.Caption.ToLower().Contains("object browser"));
             return windows.FirstOrDefault();
         }
 
